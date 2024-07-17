@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2,
+    "name": "MUCABRASIL Turbo",
+    "version": "1.0",
+    "description": "Extensão para navegador Google Chrome para o MUCABRASIL",
+    "permissions": ["activeTab"],
+    "browser_action": {
+      "default_popup": "popup.html",
+      "default_icon": "icon.png"
+    },
+    "icons": {
+      "48": "icon.png"
+    },
+    "content_scripts": [
+      {
+        "matches": ["*://*.mucabrasil.com.br/*"],
+        "js": ["content.js"]
+      }
+    ]
+  }
+  
