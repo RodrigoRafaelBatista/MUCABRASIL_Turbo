@@ -1,9 +1,9 @@
 {
     "manifest_version": 2,
     "name": "MUCABRASIL Turbo",
-    "version": "1.0",
-    "description": "Extensão para navegador Google Chrome para o MUCABRASIL",
-    "permissions": ["activeTab"],
+    "version": "2.0",
+    "description": "Extensão avançada para MUCABRASIL com rankings personalizados e recursos aprimorados",
+    "permissions": ["activeTab", "storage"],
     "browser_action": {
       "default_popup": "popup.html",
       "default_icon": "icon.png"
