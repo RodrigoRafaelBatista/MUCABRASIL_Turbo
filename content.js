@@ -698,39 +698,111 @@ function loadIntegratedVersion() {
         }
 
         calculateSequences(sieges) {
-            const sequences = {};
-            let currentGuild = null;
-            let currentSequence = 0;
+            console.log(`=== CALCULANDO SEQUÊNCIAS ===`);
+            console.log(`Total de sieges: ${sieges.length}`);
             
-            // Ordena os sieges por ano e data
+            // Ordena os sieges por ano e data de forma mais robusta
             const sortedSieges = sieges.sort((a, b) => {
+                // Primeiro por ano
                 if (a.year !== b.year) return a.year - b.year;
-                return a.date.localeCompare(b.date);
+                
+                // Depois por data - converte DD/MM para ordenação
+                const dateA = a.date.split('/');
+                const dateB = b.date.split('/');
+                const dayA = parseInt(dateA[0]);
+                const monthA = parseInt(dateA[1]) || 1;
+                const dayB = parseInt(dateB[0]);
+                const monthB = parseInt(dateB[1]) || 1;
+                
+                if (monthA !== monthB) return monthA - monthB;
+                return dayA - dayB;
             });
             
-            sortedSieges.forEach(siege => {
-                // Comparação case-insensitive para sequências
-                const siegeGuildLower = siege.guild ? siege.guild.toLowerCase() : '';
-                const currentGuildLower = currentGuild ? currentGuild.toLowerCase() : '';
+            console.log('Primeiros 10 sieges ordenados:');
+            sortedSieges.slice(0, 10).forEach((siege, i) => {
+                console.log(`${i+1}: ${siege.year} - ${siege.date} - ${siege.guild}`);
+            });
+            
+            const allSequences = {}; // Armazena TODAS as sequências encontradas para cada guild
+            let currentGuild = null;
+            let currentSequence = 0;
+            let sequenceStart = null;
+            
+            // Função para normalizar nome da guild (case-insensitive)
+            const normalizeGuildName = (name) => name ? name.toLowerCase() : '';
+            
+            // Função para registrar uma sequência
+            const registerSequence = (guild, sequence, start, end) => {
+                if (!guild || sequence < 2) return;
                 
-                if (siegeGuildLower === currentGuildLower && currentGuild) {
+                const normalizedName = normalizeGuildName(guild);
+                if (!allSequences[normalizedName]) {
+                    allSequences[normalizedName] = {
+                        originalName: guild, // Guarda o nome original
+                        sequences: []
+                    };
+                }
+                
+                allSequences[normalizedName].sequences.push({
+                    length: sequence,
+                    start: start,
+                    end: end
+                });
+                
+                console.log(`Sequência registrada: ${guild} = ${sequence} vitórias (${start} a ${end})`);
+            };
+            
+            sortedSieges.forEach((siege, index) => {
+                if (!siege.guild) return;
+                
+                const currentGuildNormalized = normalizeGuildName(currentGuild);
+                const siegeGuildNormalized = normalizeGuildName(siege.guild);
+                
+                if (siegeGuildNormalized === currentGuildNormalized && currentGuild) {
+                    // Mesma guild - continua a sequência
                     currentSequence++;
                 } else {
-                    if (currentGuild && currentSequence > 1) {
-                        sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+                    // Guild diferente - registra a sequência anterior se válida
+                    if (currentGuild && currentSequence >= 2) {
+                        const endInfo = index > 0 ? `${sortedSieges[index-1].year}-${sortedSieges[index-1].date}` : 'unknown';
+                        registerSequence(currentGuild, currentSequence, sequenceStart, endInfo);
                     }
+                    
+                    // Inicia nova sequência
                     currentGuild = siege.guild;
                     currentSequence = 1;
+                    sequenceStart = `${siege.year}-${siege.date}`;
                 }
             });
             
-            // Verifica a última sequência
-            if (currentGuild && currentSequence > 1) {
-                sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+            // Registra a última sequência se válida
+            if (currentGuild && currentSequence >= 2) {
+                const lastSiege = sortedSieges[sortedSieges.length - 1];
+                const endInfo = `${lastSiege.year}-${lastSiege.date}`;
+                registerSequence(currentGuild, currentSequence, sequenceStart, endInfo);
             }
             
-            // Normaliza os nomes das guilds no resultado final
-            return this.dataCollector.normalizeNames(sequences);
+            // Agora pega a MAIOR sequência de cada guild
+            const maxSequences = {};
+            Object.entries(allSequences).forEach(([normalizedName, data]) => {
+                const maxSequence = Math.max(...data.sequences.map(s => s.length));
+                const maxSeqData = data.sequences.find(s => s.length === maxSequence);
+                
+                maxSequences[data.originalName] = maxSequence;
+                
+                console.log(`Guild: ${data.originalName}`);
+                console.log(`  - Total de sequências encontradas: ${data.sequences.length}`);
+                console.log(`  - Sequências: ${data.sequences.map(s => s.length).join(', ')}`);
+                console.log(`  - MAIOR sequência: ${maxSequence} (${maxSeqData.start} a ${maxSeqData.end})`);
+            });
+            
+            console.log('\n=== RESULTADO FINAL ===');
+            console.log('Maiores sequências por guild:');
+            Object.entries(maxSequences).forEach(([guild, seq]) => {
+                console.log(`${guild}: ${seq} vitórias consecutivas`);
+            });
+            
+            return maxSequences;
         }
 
         async collectData() {
@@ -745,7 +817,6 @@ function loadIntegratedVersion() {
             
             const { allSieges, dataByYear } = sharedData;
             
-            const guildSequences = {};
             const processedDataByYear = {};
             
             // Processa dados por ano
