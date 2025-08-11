@@ -226,6 +226,35 @@ function loadIntegratedVersion() {
             return CONFIG.DEFAULT_YEARS.START;
         }
 
+        // Normaliza nomes para serem case-insensitive, mas mantém a última ocorrência encontrada
+        normalizeNames(data) {
+            const nameMap = new Map(); // Mapeia lowercase -> última ocorrência original
+            const normalized = {};
+
+            Object.entries(data).forEach(([name, count]) => {
+                const lowerName = name.toLowerCase();
+                
+                if (!nameMap.has(lowerName)) {
+                    // Primeira ocorrência - usa o nome original
+                    nameMap.set(lowerName, name);
+                    normalized[name] = count;
+                } else {
+                    // Nome já existe - atualiza para a última versão e soma as contagens
+                    const previousName = nameMap.get(lowerName);
+                    const previousCount = normalized[previousName] || 0;
+                    
+                    // Remove a entrada anterior
+                    delete normalized[previousName];
+                    
+                    // Adiciona com o novo nome (última ocorrência) e soma total
+                    nameMap.set(lowerName, name);
+                    normalized[name] = previousCount + count;
+                }
+            });
+
+            return normalized;
+        }
+
         async collectAllData() {
             const currentYear = CONFIG.DEFAULT_YEARS.CURRENT;
             const startYear = this.getStartYear();
@@ -359,7 +388,7 @@ function loadIntegratedVersion() {
                         yearGuildData[siege.guild] = (yearGuildData[siege.guild] || 0) + 1;
                     }
                 });
-                processedDataByYear[year] = yearGuildData;
+                processedDataByYear[year] = this.dataCollector.normalizeNames(yearGuildData);
             });
             
             // Processa dados totais
@@ -369,8 +398,10 @@ function loadIntegratedVersion() {
                 }
             });
             
+            const normalizedGuildVictories = this.dataCollector.normalizeNames(guildVictories);
+            
             return { 
-                guildVictories, 
+                guildVictories: normalizedGuildVictories, 
                 dataByYear: processedDataByYear,
                 rawData: { allSieges, dataByYear }
             };
@@ -467,7 +498,7 @@ function loadIntegratedVersion() {
                         yearGmData[siege.gm] = (yearGmData[siege.gm] || 0) + 1;
                     }
                 });
-                processedDataByYear[year] = yearGmData;
+                processedDataByYear[year] = this.dataCollector.normalizeNames(yearGmData);
             });
             
             // Processa dados totais
@@ -477,8 +508,10 @@ function loadIntegratedVersion() {
                 }
             });
             
+            const normalizedGmVictories = this.dataCollector.normalizeNames(gmVictories);
+            
             return { 
-                guildVictories: gmVictories, 
+                guildVictories: normalizedGmVictories, 
                 dataByYear: processedDataByYear 
             };
         }
@@ -576,7 +609,7 @@ function loadIntegratedVersion() {
                         }
                     });
                 });
-                processedDataByYear[year] = yearGmData;
+                processedDataByYear[year] = this.dataCollector.normalizeNames(yearGmData);
             });
             
             // Processa dados totais
@@ -588,8 +621,10 @@ function loadIntegratedVersion() {
                 });
             });
             
+            const normalizedGmDesbuffVictories = this.dataCollector.normalizeNames(gmDesbuffVictories);
+            
             return { 
-                guildVictories: gmDesbuffVictories, 
+                guildVictories: normalizedGmDesbuffVictories, 
                 dataByYear: processedDataByYear 
             };
         }
@@ -662,6 +697,42 @@ function loadIntegratedVersion() {
             return true;
         }
 
+        calculateSequences(sieges) {
+            const sequences = {};
+            let currentGuild = null;
+            let currentSequence = 0;
+            
+            // Ordena os sieges por ano e data
+            const sortedSieges = sieges.sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.date.localeCompare(b.date);
+            });
+            
+            sortedSieges.forEach(siege => {
+                // Comparação case-insensitive para sequências
+                const siegeGuildLower = siege.guild ? siege.guild.toLowerCase() : '';
+                const currentGuildLower = currentGuild ? currentGuild.toLowerCase() : '';
+                
+                if (siegeGuildLower === currentGuildLower && currentGuild) {
+                    currentSequence++;
+                } else {
+                    if (currentGuild && currentSequence > 1) {
+                        sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+                    }
+                    currentGuild = siege.guild;
+                    currentSequence = 1;
+                }
+            });
+            
+            // Verifica a última sequência
+            if (currentGuild && currentSequence > 1) {
+                sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+            }
+            
+            // Normaliza os nomes das guilds no resultado final
+            return this.dataCollector.normalizeNames(sequences);
+        }
+
         async collectData() {
             // Verifica se há dados compartilhados em cache
             const sharedCacheKey = 'castle_siege_shared_data';
@@ -690,37 +761,6 @@ function loadIntegratedVersion() {
                 guildVictories: allSequences, 
                 dataByYear: processedDataByYear 
             };
-        }
-
-        calculateSequences(sieges) {
-            const sequences = {};
-            let currentGuild = null;
-            let currentSequence = 0;
-            
-            // Ordena os sieges por ano e data
-            const sortedSieges = sieges.sort((a, b) => {
-                if (a.year !== b.year) return a.year - b.year;
-                return a.date.localeCompare(b.date);
-            });
-            
-            sortedSieges.forEach(siege => {
-                if (siege.guild === currentGuild) {
-                    currentSequence++;
-                } else {
-                    if (currentGuild && currentSequence > 1) {
-                        sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
-                    }
-                    currentGuild = siege.guild;
-                    currentSequence = 1;
-                }
-            });
-            
-            // Verifica a última sequência
-            if (currentGuild && currentSequence > 1) {
-                sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
-            }
-            
-            return sequences;
         }
 
         createTable(guildSequences) {
