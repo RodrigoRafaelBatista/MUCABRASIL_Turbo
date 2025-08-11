@@ -752,6 +752,11 @@ function loadIntegratedVersion() {
                 console.log(`Sequência registrada: ${guild} = ${sequence} vitórias (${start} a ${end})`);
             };
             
+            // Função para formatar data no formato dd/mm/yyyy
+            const formatDate = (year, date) => {
+                return `${date}/${year}`;
+            };
+            
             sortedSieges.forEach((siege, index) => {
                 if (!siege.guild) return;
                 
@@ -764,31 +769,34 @@ function loadIntegratedVersion() {
                 } else {
                     // Guild diferente - registra a sequência anterior se válida
                     if (currentGuild && currentSequence >= 2) {
-                        const endInfo = index > 0 ? `${sortedSieges[index-1].year}-${sortedSieges[index-1].date}` : 'unknown';
+                        const endInfo = index > 0 ? formatDate(sortedSieges[index-1].year, sortedSieges[index-1].date) : 'unknown';
                         registerSequence(currentGuild, currentSequence, sequenceStart, endInfo);
                     }
                     
                     // Inicia nova sequência
                     currentGuild = siege.guild;
                     currentSequence = 1;
-                    sequenceStart = `${siege.year}-${siege.date}`;
+                    sequenceStart = formatDate(siege.year, siege.date);
                 }
             });
             
             // Registra a última sequência se válida
             if (currentGuild && currentSequence >= 2) {
                 const lastSiege = sortedSieges[sortedSieges.length - 1];
-                const endInfo = `${lastSiege.year}-${lastSiege.date}`;
+                const endInfo = formatDate(lastSiege.year, lastSiege.date);
                 registerSequence(currentGuild, currentSequence, sequenceStart, endInfo);
             }
             
-            // Agora pega a MAIOR sequência de cada guild
+            // Agora pega a MAIOR sequência de cada guild com informações de período
             const maxSequences = {};
             Object.entries(allSequences).forEach(([normalizedName, data]) => {
                 const maxSequence = Math.max(...data.sequences.map(s => s.length));
                 const maxSeqData = data.sequences.find(s => s.length === maxSequence);
                 
-                maxSequences[data.originalName] = maxSequence;
+                maxSequences[data.originalName] = {
+                    length: maxSequence,
+                    period: `${maxSeqData.start} a ${maxSeqData.end}`
+                };
                 
                 console.log(`Guild: ${data.originalName}`);
                 console.log(`  - Total de sequências encontradas: ${data.sequences.length}`);
@@ -798,8 +806,8 @@ function loadIntegratedVersion() {
             
             console.log('\n=== RESULTADO FINAL ===');
             console.log('Maiores sequências por guild:');
-            Object.entries(maxSequences).forEach(([guild, seq]) => {
-                console.log(`${guild}: ${seq} vitórias consecutivas`);
+            Object.entries(maxSequences).forEach(([guild, data]) => {
+                console.log(`${guild}: ${data.length} vitórias consecutivas (${data.period})`);
             });
             
             return maxSequences;
@@ -836,11 +844,12 @@ function loadIntegratedVersion() {
 
         createTable(guildSequences) {
             const sortedGuilds = Object.entries(guildSequences)
-                .sort(([,a], [,b]) => b - a)
+                .sort(([,a], [,b]) => (b.length || b) - (a.length || a))
                 .map(([guild, sequence], index) => ({
                     position: index + 1,
                     guild: guild,
-                    sequence: sequence
+                    sequence: sequence.length || sequence,
+                    period: sequence.period || ''
                 }));
 
             if (sortedGuilds.length === 0) {
@@ -854,15 +863,17 @@ function loadIntegratedVersion() {
                             <td class="n"><b>Posição</b></td>
                             <td><b>Guild</b></td>
                             <td><b>Maior Sequência</b></td>
+                            <td><b>Período</b></td>
                         </tr>
             `;
             
-            sortedGuilds.forEach(({position, guild, sequence}) => {
+            sortedGuilds.forEach(({position, guild, sequence, period}) => {
                 tableHTML += `
                     <tr>
                         <td align="center"><b>${position}º</b></td>
                         <td><a href="?go=guild&n=${encodeURIComponent(guild)}">${guild}</a></td>
                         <td align="center">${sequence} vitórias consecutivas</td>
+                        <td align="center">${period}</td>
                     </tr>
                 `;
             });
