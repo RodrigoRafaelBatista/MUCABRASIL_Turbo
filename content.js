@@ -4,11 +4,56 @@
  * Compatible com Firefox e Chrome
  */
 
+// Função para carregar o jQuery dinamicamente se não estiver presente
+function loadJQuery(callback) {
+    if (window.jQuery) {
+        callback();
+        return;
+    }
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('libs/jquery-3.7.1.min.js');
+    script.onload = callback;
+    document.head.appendChild(script);
+}
+
+
+// Cria instantaneamente a seção visual do menu Turbo
+function createTurboMenuSectionInstant() {
+    const tryCreate = () => {
+        const menuContainer = document.querySelector('#menu-vertical');
+        if (!menuContainer) return false;
+        if (document.getElementById('mucabrasil-turbo-section')) return true;
+
+        // Cria o título da seção
+        const sectionTitle = document.createElement('h2');
+        sectionTitle.innerHTML = 'MUCABRASIL Turbo';
+        sectionTitle.id = 'mucabrasil-turbo-section-title';
+
+        // Cria a lista da seção
+        const sectionList = document.createElement('ul');
+        sectionList.id = 'mucabrasil-turbo-section';
+
+        menuContainer.appendChild(sectionTitle);
+        menuContainer.appendChild(sectionList);
+        return true;
+    };
+    // Tenta criar imediatamente e depois em intervalos curtos até conseguir
+    if (!tryCreate()) {
+        const interval = setInterval(() => {
+            if (tryCreate()) clearInterval(interval);
+        }, 50);
+    }
+}
+
 // Função principal de inicialização
 async function initMucaBrasilTurbo() {
-    // Carrega diretamente a versão integrada para compatibilidade total
-    console.log('Carregando MUCABRASIL Turbo versão integrada...');
-    loadIntegratedVersion();
+    // Cria o menu Turbo visual instantaneamente
+    createTurboMenuSectionInstant();
+    // Garante que o jQuery esteja carregado antes de iniciar o resto
+    loadJQuery(() => {
+        console.log('Carregando MUCABRASIL Turbo versão integrada...');
+        loadIntegratedVersion();
+    });
 }
 
 /**
@@ -167,32 +212,24 @@ function loadIntegratedVersion() {
 
     const cacheService = new CacheService();
 
-    // Castle Siege Ranking
-    class CastleSiegeRanking {
-        getName() {
-            return 'Castle Siege (Ranking)';
+    // Base Castle Siege Data Collector
+    class CastleSiegeDataCollector {
+        constructor() {
+            this.allSiegesData = [];
         }
 
         getBaseUrl() {
             return `${CONFIG.SITE.BASE_URL}/?go=castlesiege`;
         }
 
-        getMenuHref() {
-            return '?go=castlesiegeranking';
-        }
-
         getStartYear() {
             return CONFIG.DEFAULT_YEARS.START;
         }
 
-        supportsYearFilter() {
-            return true;
-        }
-
-        async collectData() {
+        async collectAllData() {
             const currentYear = CONFIG.DEFAULT_YEARS.CURRENT;
             const startYear = this.getStartYear();
-            const guildVictories = {};
+            const allSieges = [];
             const dataByYear = {};
             
             try {
@@ -206,17 +243,15 @@ function loadIntegratedVersion() {
                 responses.forEach((result, index) => {
                     if (result.status === 'fulfilled') {
                         const year = startYear + index;
-                        const yearData = this.processData(result.value, year);
+                        const yearData = this.processYearData(result.value, year);
                         
                         dataByYear[year] = yearData;
-                        
-                        Object.entries(yearData).forEach(([guild, victories]) => {
-                            guildVictories[guild] = (guildVictories[guild] || 0) + victories;
-                        });
+                        allSieges.push(...yearData);
                     }
                 });
                 
-                return { guildVictories, dataByYear };
+                this.allSiegesData = allSieges;
+                return { allSieges, dataByYear };
                 
             } catch (error) {
                 console.error('Erro na coleta de dados Castle Siege:', error);
@@ -224,33 +259,121 @@ function loadIntegratedVersion() {
             }
         }
 
-        processData(html, year) {
-            const guildVictories = {};
+        processYearData(html, year) {
+            const sieges = [];
             
             try {
                 const doc = HttpUtils.parseHTML(html);
                 
-                const guildLinks = DOMUtils.evaluateXPath(
-                    '//div[@id="conteudo"]//table//td[2]//a',
+                // Busca todas as linhas da tabela (exceto cabeçalho)
+                const tableRows = DOMUtils.evaluateXPath(
+                    '//div[@id="conteudo"]//table[@class="tabela cor auto"]//tr[position()>1]',
                     doc
                 );
                 
-                for (let i = 0; i < guildLinks.snapshotLength; i++) {
-                    const guildLink = guildLinks.snapshotItem(i);
-                    const guildName = guildLink.textContent.trim();
+                for (let i = 0; i < tableRows.snapshotLength; i++) {
+                    const row = tableRows.snapshotItem(i);
+                    const cells = row.querySelectorAll('td');
                     
-                    if (guildName) {
-                        guildVictories[guildName] = (guildVictories[guildName] || 0) + 1;
+                    if (cells.length >= 11) {
+                        const siegeData = {
+                            year: year,
+                            date: cells[0].textContent.trim(),
+                            guild: this.extractTextFromCell(cells[1]),
+                            gm: this.extractTextFromCell(cells[2]),
+                            alliance1: this.extractTextFromCell(cells[3]),
+                            gm1: this.extractTextFromCell(cells[4]),
+                            alliance2: this.extractTextFromCell(cells[5]),
+                            gm2: this.extractTextFromCell(cells[6]),
+                            alliance3: this.extractTextFromCell(cells[7]),
+                            gm3: this.extractTextFromCell(cells[8]),
+                            alliance4: this.extractTextFromCell(cells[9]),
+                            gm4: this.extractTextFromCell(cells[10])
+                        };
+                        
+                        sieges.push(siegeData);
                     }
                 }
                 
-                console.log(`Ano ${year} processado. Guilds encontradas:`, guildLinks.snapshotLength);
+                console.log(`Ano ${year} processado. Sieges encontrados:`, sieges.length);
                 
             } catch (error) {
                 console.error(`Erro ao processar dados do ano ${year}:`, error);
             }
             
-            return guildVictories;
+            return sieges;
+        }
+
+        extractTextFromCell(cell) {
+            const link = cell.querySelector('a');
+            return link ? link.textContent.trim() : cell.textContent.trim();
+        }
+    }
+
+    // Castle Siege Ranking
+    class CastleSiegeRanking {
+        constructor() {
+            this.dataCollector = new CastleSiegeDataCollector();
+        }
+
+        getName() {
+            return 'Castle Siege (Ranking)';
+        }
+
+        getBaseUrl() {
+            return this.dataCollector.getBaseUrl();
+        }
+
+        getMenuHref() {
+            return '?go=castlesiegeranking';
+        }
+
+        getStartYear() {
+            return this.dataCollector.getStartYear();
+        }
+
+        supportsYearFilter() {
+            return true;
+        }
+
+        async collectData() {
+            // Verifica se há dados compartilhados em cache
+            const sharedCacheKey = 'castle_siege_shared_data';
+            let sharedData = cacheService.get(sharedCacheKey);
+            
+            if (!sharedData) {
+                sharedData = await this.dataCollector.collectAllData();
+                cacheService.set(sharedCacheKey, sharedData);
+            }
+            
+            const { allSieges, dataByYear } = sharedData;
+            
+            const guildVictories = {};
+            const processedDataByYear = {};
+            
+            // Processa dados por ano
+            Object.entries(dataByYear).forEach(([year, sieges]) => {
+                const yearGuildData = {};
+                sieges.forEach(siege => {
+                    if (siege.guild) {
+                        yearGuildData[siege.guild] = (yearGuildData[siege.guild] || 0) + 1;
+                    }
+                });
+                processedDataByYear[year] = yearGuildData;
+            });
+            
+            // Processa dados totais
+            allSieges.forEach(siege => {
+                if (siege.guild) {
+                    guildVictories[siege.guild] = (guildVictories[siege.guild] || 0) + 1;
+                }
+            });
+            
+            return { 
+                guildVictories, 
+                dataByYear: processedDataByYear,
+                rawData: { allSieges, dataByYear }
+            };
         }
 
         createTable(guildVictories) {
@@ -282,6 +405,353 @@ function loadIntegratedVersion() {
                         <td align="center"><b>${position}º</b></td>
                         <td><a href="?go=guild&n=${encodeURIComponent(guild)}">${guild}</a></td>
                         <td align="center">${victories}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            return tableHTML;
+        }
+    }
+
+    // Guild Master Registro Ranking
+    class GuildMasterRegistroRanking {
+        constructor() {
+            this.dataCollector = new CastleSiegeDataCollector();
+        }
+
+        getName() {
+            return 'Guild Master Registro';
+        }
+
+        getBaseUrl() {
+            return this.dataCollector.getBaseUrl();
+        }
+
+        getMenuHref() {
+            return '?go=gmregistroranking';
+        }
+
+        getStartYear() {
+            return this.dataCollector.getStartYear();
+        }
+
+        supportsYearFilter() {
+            return true;
+        }
+
+        async collectData() {
+            // Verifica se há dados compartilhados em cache
+            const sharedCacheKey = 'castle_siege_shared_data';
+            let sharedData = cacheService.get(sharedCacheKey);
+            
+            if (!sharedData) {
+                sharedData = await this.dataCollector.collectAllData();
+                cacheService.set(sharedCacheKey, sharedData);
+            }
+            
+            const { allSieges, dataByYear } = sharedData;
+            
+            const gmVictories = {};
+            const processedDataByYear = {};
+            
+            // Processa dados por ano
+            Object.entries(dataByYear).forEach(([year, sieges]) => {
+                const yearGmData = {};
+                sieges.forEach(siege => {
+                    if (siege.gm) {
+                        yearGmData[siege.gm] = (yearGmData[siege.gm] || 0) + 1;
+                    }
+                });
+                processedDataByYear[year] = yearGmData;
+            });
+            
+            // Processa dados totais
+            allSieges.forEach(siege => {
+                if (siege.gm) {
+                    gmVictories[siege.gm] = (gmVictories[siege.gm] || 0) + 1;
+                }
+            });
+            
+            return { 
+                guildVictories: gmVictories, 
+                dataByYear: processedDataByYear 
+            };
+        }
+
+        createTable(gmVictories) {
+            const sortedGMs = Object.entries(gmVictories)
+                .sort(([,a], [,b]) => b - a)
+                .map(([gm, victories], index) => ({
+                    position: index + 1,
+                    gm: gm,
+                    victories: victories
+                }));
+
+            if (sortedGMs.length === 0) {
+                return '<p style="color: orange;">Nenhum dado encontrado</p>';
+            }
+
+            let tableHTML = `
+                <table class="tabela cor auto" id="rankingTableData">
+                    <tbody>
+                        <tr>
+                            <td class="n"><b>Posição</b></td>
+                            <td><b>Guild Master</b></td>
+                            <td><b>Vitórias</b></td>
+                        </tr>
+            `;
+            
+            sortedGMs.forEach(({position, gm, victories}) => {
+                tableHTML += `
+                    <tr>
+                        <td align="center"><b>${position}º</b></td>
+                        <td><a href="?go=personagem&n=${encodeURIComponent(gm)}">${gm}</a></td>
+                        <td align="center">${victories}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            return tableHTML;
+        }
+    }
+
+    // Guild Master Desbuff Ranking
+    class GuildMasterDesbuffRanking {
+        constructor() {
+            this.dataCollector = new CastleSiegeDataCollector();
+        }
+
+        getName() {
+            return 'Guild Master Desbuff';
+        }
+
+        getBaseUrl() {
+            return this.dataCollector.getBaseUrl();
+        }
+
+        getMenuHref() {
+            return '?go=gmdesbuffranking';
+        }
+
+        getStartYear() {
+            return this.dataCollector.getStartYear();
+        }
+
+        supportsYearFilter() {
+            return true;
+        }
+
+        async collectData() {
+            // Verifica se há dados compartilhados em cache
+            const sharedCacheKey = 'castle_siege_shared_data';
+            let sharedData = cacheService.get(sharedCacheKey);
+            
+            if (!sharedData) {
+                sharedData = await this.dataCollector.collectAllData();
+                cacheService.set(sharedCacheKey, sharedData);
+            }
+            
+            const { allSieges, dataByYear } = sharedData;
+            
+            const gmDesbuffVictories = {};
+            const processedDataByYear = {};
+            
+            // Processa dados por ano
+            Object.entries(dataByYear).forEach(([year, sieges]) => {
+                const yearGmData = {};
+                sieges.forEach(siege => {
+                    [siege.gm1, siege.gm2, siege.gm3, siege.gm4].forEach(gm => {
+                        if (gm && gm.trim()) {
+                            yearGmData[gm] = (yearGmData[gm] || 0) + 1;
+                        }
+                    });
+                });
+                processedDataByYear[year] = yearGmData;
+            });
+            
+            // Processa dados totais
+            allSieges.forEach(siege => {
+                [siege.gm1, siege.gm2, siege.gm3, siege.gm4].forEach(gm => {
+                    if (gm && gm.trim()) {
+                        gmDesbuffVictories[gm] = (gmDesbuffVictories[gm] || 0) + 1;
+                    }
+                });
+            });
+            
+            return { 
+                guildVictories: gmDesbuffVictories, 
+                dataByYear: processedDataByYear 
+            };
+        }
+
+        createTable(gmDesbuffVictories) {
+            const sortedGMs = Object.entries(gmDesbuffVictories)
+                .sort(([,a], [,b]) => b - a)
+                .map(([gm, victories], index) => ({
+                    position: index + 1,
+                    gm: gm,
+                    victories: victories
+                }));
+
+            if (sortedGMs.length === 0) {
+                return '<p style="color: orange;">Nenhum dado encontrado</p>';
+            }
+
+            let tableHTML = `
+                <table class="tabela cor auto" id="rankingTableData">
+                    <tbody>
+                        <tr>
+                            <td class="n"><b>Posição</b></td>
+                            <td><b>Guild Master</b></td>
+                            <td><b>Participações</b></td>
+                        </tr>
+            `;
+            
+            sortedGMs.forEach(({position, gm, victories}) => {
+                tableHTML += `
+                    <tr>
+                        <td align="center"><b>${position}º</b></td>
+                        <td><a href="?go=personagem&n=${encodeURIComponent(gm)}">${gm}</a></td>
+                        <td align="center">${victories}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            return tableHTML;
+        }
+    }
+
+    // Maiores Sequências Ranking
+    class MaioresSequenciasRanking {
+        constructor() {
+            this.dataCollector = new CastleSiegeDataCollector();
+        }
+
+        getName() {
+            return 'Maiores Sequências';
+        }
+
+        getBaseUrl() {
+            return this.dataCollector.getBaseUrl();
+        }
+
+        getMenuHref() {
+            return '?go=maioressequenciasranking';
+        }
+
+        getStartYear() {
+            return this.dataCollector.getStartYear();
+        }
+
+        supportsYearFilter() {
+            return true;
+        }
+
+        async collectData() {
+            // Verifica se há dados compartilhados em cache
+            const sharedCacheKey = 'castle_siege_shared_data';
+            let sharedData = cacheService.get(sharedCacheKey);
+            
+            if (!sharedData) {
+                sharedData = await this.dataCollector.collectAllData();
+                cacheService.set(sharedCacheKey, sharedData);
+            }
+            
+            const { allSieges, dataByYear } = sharedData;
+            
+            const guildSequences = {};
+            const processedDataByYear = {};
+            
+            // Processa dados por ano
+            Object.entries(dataByYear).forEach(([year, sieges]) => {
+                const yearSequences = this.calculateSequences(sieges);
+                processedDataByYear[year] = yearSequences;
+            });
+            
+            // Processa dados totais
+            const allSequences = this.calculateSequences(allSieges);
+            
+            return { 
+                guildVictories: allSequences, 
+                dataByYear: processedDataByYear 
+            };
+        }
+
+        calculateSequences(sieges) {
+            const sequences = {};
+            let currentGuild = null;
+            let currentSequence = 0;
+            
+            // Ordena os sieges por ano e data
+            const sortedSieges = sieges.sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.date.localeCompare(b.date);
+            });
+            
+            sortedSieges.forEach(siege => {
+                if (siege.guild === currentGuild) {
+                    currentSequence++;
+                } else {
+                    if (currentGuild && currentSequence > 1) {
+                        sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+                    }
+                    currentGuild = siege.guild;
+                    currentSequence = 1;
+                }
+            });
+            
+            // Verifica a última sequência
+            if (currentGuild && currentSequence > 1) {
+                sequences[currentGuild] = Math.max(sequences[currentGuild] || 0, currentSequence);
+            }
+            
+            return sequences;
+        }
+
+        createTable(guildSequences) {
+            const sortedGuilds = Object.entries(guildSequences)
+                .sort(([,a], [,b]) => b - a)
+                .map(([guild, sequence], index) => ({
+                    position: index + 1,
+                    guild: guild,
+                    sequence: sequence
+                }));
+
+            if (sortedGuilds.length === 0) {
+                return '<p style="color: orange;">Nenhum dado encontrado</p>';
+            }
+
+            let tableHTML = `
+                <table class="tabela cor auto" id="rankingTableData">
+                    <tbody>
+                        <tr>
+                            <td class="n"><b>Posição</b></td>
+                            <td><b>Guild</b></td>
+                            <td><b>Maior Sequência</b></td>
+                        </tr>
+            `;
+            
+            sortedGuilds.forEach(({position, guild, sequence}) => {
+                tableHTML += `
+                    <tr>
+                        <td align="center"><b>${position}º</b></td>
+                        <td><a href="?go=guild&n=${encodeURIComponent(guild)}">${guild}</a></td>
+                        <td align="center">${sequence} vitórias consecutivas</td>
                     </tr>
                 `;
             });
@@ -464,7 +934,25 @@ function loadIntegratedVersion() {
 
         async preloadAllRankings() {
             const preloadPromises = [];
+            const sharedDataCollector = new CastleSiegeDataCollector();
             
+            // Primeiro, carrega os dados compartilhados do Castle Siege
+            const sharedCacheKey = 'castle_siege_shared_data';
+            
+            if (!cacheService.has(sharedCacheKey)) {
+                preloadPromises.push(
+                    sharedDataCollector.collectAllData()
+                        .then(data => {
+                            cacheService.set(sharedCacheKey, data);
+                            console.log('Dados compartilhados do Castle Siege pré-carregados');
+                        })
+                        .catch(error => {
+                            console.error('Erro no pré-carregamento dos dados compartilhados:', error);
+                        })
+                );
+            }
+            
+            // Em seguida, processa cada ranking individualmente se necessário
             this.rankings.forEach((ranking, href) => {
                 const cacheKey = CacheService.generateKey(ranking.getName());
                 
@@ -652,7 +1140,14 @@ function loadIntegratedVersion() {
 
         registerRankings() {
             const castleSiegeRanking = new CastleSiegeRanking();
+            const gmRegistroRanking = new GuildMasterRegistroRanking();
+            const gmDesbuffRanking = new GuildMasterDesbuffRanking();
+            const maioresSequenciasRanking = new MaioresSequenciasRanking();
+            
             this.addRanking(castleSiegeRanking);
+            this.addRanking(gmRegistroRanking);
+            this.addRanking(gmDesbuffRanking);
+            this.addRanking(maioresSequenciasRanking);
             
             console.log(`${this.rankings.length} ranking(s) registrado(s)`);
         }

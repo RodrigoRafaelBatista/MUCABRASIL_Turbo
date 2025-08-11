@@ -14,7 +14,7 @@
     "content_scripts": [
       {
         "matches": ["*://*.mucabrasil.com.br/*"],
-        "js": ["jquery.js", "content.js"],
+        "js": ["libs/jquery-3.7.1.min.js", "content.js"],
         "run_at": "document_start"
       }
     ]
