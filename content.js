@@ -311,26 +311,25 @@ function loadIntegratedVersion() {
 
             const currentYear = CONFIG.DEFAULT_YEARS.CURRENT;
             const startYear = this.ranking.getStartYear();
-            
+
             let filterHTML = `
-                <div style="margin-bottom: 15px; padding: 10px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 5px;">
-                    <label for="yearFilter" style="font-weight: bold; margin-right: 10px;">Filtrar por ano:</label>
-                    <select id="yearFilter" style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
-                        <option value="all" ${this.selectedYear === 'all' ? 'selected' : ''}>
-                            Todos os anos (${startYear}-${currentYear})
-                        </option>
+                <tr>
+                    <td style="width: 160px">Filtrar por ano:</td>
+                    <td style="width: 200px">
+                        <select id="yearFilter" name="yearFilter" class="text">
+                            <option value="all" ${this.selectedYear === 'all' ? 'selected' : ''}>Todos os anos (${startYear}-${currentYear})</option>
             `;
-            
             for (let year = currentYear; year >= startYear; year--) {
                 const isSelected = this.selectedYear == year ? 'selected' : '';
                 filterHTML += `<option value="${year}" ${isSelected}>${year}</option>`;
             }
-            
             filterHTML += `
-                    </select>
-                </div>
+                        </select>
+                    </td>
+                    <td></td>
+                </tr>
+                <tr><td colspan="3" style="height: 12px;"></td></tr>
             `;
-
             return filterHTML;
         }
 

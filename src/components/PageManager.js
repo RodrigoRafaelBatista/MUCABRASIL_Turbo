@@ -35,6 +35,7 @@ class PageManager {
         }, Config.TIMING.PRELOAD_DELAY);
     }
 
+
     /**
      * Pré-carrega dados de todos os rankings
      */

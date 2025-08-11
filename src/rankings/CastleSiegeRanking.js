@@ -124,36 +124,68 @@ class CastleSiegeRanking extends IRanking {
             }));
 
         if (sortedGuilds.length === 0) {
+            // Retorna HTML simples se não houver dados
             return '<p style="color: orange;">Nenhum dado encontrado</p>';
         }
 
-        // Cria tabela HTML
-        let tableHTML = `
-            <table class="${Config.CSS_CLASSES.TABLE}" id="rankingTableData">
-                <tbody>
-                    <tr>
-                        <td class="${Config.CSS_CLASSES.TABLE_HEADER}"><b>Posição</b></td>
-                        <td><b>Guild</b></td>
-                        <td><b>Vitórias</b></td>
-                    </tr>
-        `;
-        
-        sortedGuilds.forEach(({position, guild, victories}) => {
-            tableHTML += `
-                <tr>
-                    <td align="center"><b>${position}º</b></td>
-                    <td><a href="?go=guild&n=${encodeURIComponent(guild)}">${guild}</a></td>
-                    <td align="center">${victories}</td>
-                </tr>
+        // Usa jQuery para criar a tabela de forma instantânea
+        // Garante que o jQuery está disponível no escopo global
+        const $ = window.jQuery || window.$;
+        if (!$) {
+            // Fallback para HTML se jQuery não estiver disponível
+            let tableHTML = `
+                <table class="${Config.CSS_CLASSES.TABLE}" id="rankingTableData">
+                    <tbody>
+                        <tr>
+                            <td class="${Config.CSS_CLASSES.TABLE_HEADER}"><b>Posição</b></td>
+                            <td><b>Guild</b></td>
+                            <td><b>Vitórias</b></td>
+                        </tr>
             `;
-        });
-        
-        tableHTML += `
-                </tbody>
-            </table>
-        `;
+            sortedGuilds.forEach(({position, guild, victories}) => {
+                tableHTML += `
+                    <tr>
+                        <td align="center"><b>${position}º</b></td>
+                        <td><a href="?go=guild&n=${encodeURIComponent(guild)}">${guild}</a></td>
+                        <td align="center">${victories}</td>
+                    </tr>
+                `;
+            });
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            return tableHTML;
+        }
 
-        return tableHTML;
+        // Criação da tabela usando jQuery
+        const $table = $('<table>', {
+            class: Config.CSS_CLASSES.TABLE,
+            id: 'rankingTableData'
+        });
+        const $tbody = $('<tbody>');
+        const $header = $('<tr>')
+            .append($('<td>', { class: Config.CSS_CLASSES.TABLE_HEADER }).html('<b>Posição</b>'))
+            .append($('<td>').html('<b>Guild</b>'))
+            .append($('<td>').html('<b>Vitórias</b>'));
+        $tbody.append($header);
+
+        sortedGuilds.forEach(({position, guild, victories}) => {
+            const $row = $('<tr>')
+                .append($('<td>', { align: 'center' }).html(`<b>${position}º</b>`))
+                .append($('<td>').append(
+                    $('<a>', {
+                        href: `?go=guild&n=${encodeURIComponent(guild)}`,
+                        text: guild
+                    })
+                ))
+                .append($('<td>', { align: 'center' }).text(victories));
+            $tbody.append($row);
+        });
+
+        $table.append($tbody);
+        // Retorna o outerHTML da tabela criada instantaneamente
+        return $table[0].outerHTML;
     }
 }
 
