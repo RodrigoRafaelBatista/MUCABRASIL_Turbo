@@ -1,22 +1,22 @@
 {
-    "manifest_version": 2,
-    "name": "MUCABRASIL Turbo",
-    "version": "2.0",
-    "description": "Extensão avançada para MUCABRASIL com rankings personalizados e recursos aprimorados",
-    "permissions": ["activeTab", "storage"],
-    "browser_action": {
-      "default_popup": "popup.html",
-      "default_icon": "icon.png"
-    },
-    "icons": {
-      "48": "icon.png"
-    },
-    "content_scripts": [
-      {
-        "matches": ["*://*.mucabrasil.com.br/*"],
-        "js": ["libs/jquery-3.7.1.min.js", "content.js"],
-        "run_at": "document_start"
-      }
-    ]
-  }
+  "manifest_version": 3,
+  "name": "MUCABRASIL Turbo",
+  "version": "2.0",
+  "description": "Extensão avançada para MUCABRASIL com rankings personalizados e recursos aprimorados",
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "48": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.mucabrasil.com.br/*"],
+      "js": ["libs/jquery-3.7.1.min.js", "content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
   

@@ -24,9 +24,9 @@ function createTurboMenuSectionInstant() {
         if (!menuContainer) return false;
         if (document.getElementById('mucabrasil-turbo-section')) return true;
 
-        // Cria o título da seção
+        // Cria o título da seção com autoria
         const sectionTitle = document.createElement('h2');
-        sectionTitle.innerHTML = 'MUCABRASIL Turbo';
+        sectionTitle.innerHTML = 'MUCABRASIL Turbo <span style="font-size:12px;font-style:italic;color:#888;">by: Sasukedb</span>';
         sectionTitle.id = 'mucabrasil-turbo-section-title';
 
         // Cria a lista da seção
@@ -1169,7 +1169,7 @@ function loadIntegratedVersion() {
         updatePageTitle(ranking) {
             const titleElement = DOMUtils.findElementByXPath('//*[@id="conteudo"]//h1');
             if (titleElement) {
-                titleElement.textContent = ranking.getName();
+                titleElement.innerHTML = `${ranking.getName()} <span style="font-size:12px;font-style:italic;color:#888;">by: Sasukedb</span>`;
                 titleElement.style.display = 'block';
             }
         },
@@ -1308,7 +1308,7 @@ function loadIntegratedVersion() {
 // Inicialização principal
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initMucaBrasilTurbo);
-} else {
+// } else {
     initMucaBrasilTurbo();
 }
 
